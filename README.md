@@ -1,5 +1,5 @@
-# Évaluation d'Options sous Volatilité Stochastique
-## Méthodes de Monte-Carlo avec Réduction de Variance
+# Évaluation d'options sous volatilité stochastique
+## Méthodes de Monte Carlo avec réduction de variance
 
 **Note importante : Travail en cours (Work in Progress)**
 
