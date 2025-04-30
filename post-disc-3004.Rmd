@@ -1,0 +1,569 @@
+---
+title: "Discussion: Méthodes de Monte-Carlo avec réduction de variance"
+subtitle: "Évaluation d'options sous volatilité stochastique"
+author: "Sabrina Guerrier"
+date: "30 avril 2025"
+output:
+  html_document:
+    mathjax: "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+    code_folding: hide
+    toc: true
+    toc_float: true
+    theme: journal
+    df_print: paged
+---
+
+```{r, echo=FALSE, results='asis'}
+cat("
+<style>
+  h1 {
+    page-break-before: always;
+    margin-top: 80px;
+    padding-top: 40px;
+    border-top: 2px solid #ccc;
+  }
+  h1:first-of-type {
+    page-break-before: avoid;
+  }
+</style>
+")
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Contexte et motivation
+
+- **Limite fondamentale du modèle de Black-Scholes-Merton (1974)**  
+  → Postulat de volatilité constante incompatible avec le phénomène empirique de _smile_ de volatilité:  
+    - Variations systématiques de volatilité implicite selon le prix d'exercice et l'échéance.
+
+- **Solution théorique : modèles à volatilité stochastique**  
+  → Exemple canonique : Heston (1993)  
+    - Volatilité pilotée par un processus stochastique (ex : processus d'Ornstein-Uhlenbeck)  
+    - Avantage empirique :  
+      - Reproduction des dynamiques de marché observées :  
+        - Niveau, pente et convexité du smile
+        - Structure temporelle de la volatilité
+        
+    - Défis de calcul:
+      - Solutions analytiques rares sous volatilité stochastique
+      - Méthodes numériques nécessaires, notamment Monte Carlo
+      - Convergence lente des simulations Monte Carlo standard en $\mathcal{O}(1/\sqrt{N})$
+
+# Parcours personnel avec ce sujet
+
+- **Premiers pas** : simulations Monte Carlo en VBA dans ADM4751, pour estimer la volatilité implicite (méthode de Newton-Raphson). Approche technique sans recul critique.
+- **Projet final 2024** : Confrontation au sourire de volatilité. Prise de conscience des limites de Black-Scholes. Introduction à la tension entre théorie et réalité des marchés.
+- **Prolongement actuel** : Étude des processus stochastiques, changement de mesure, importance sampling. Base formelle pour comprendre les modèles à volatilité stochastique et expérimenter avec implémentation simple en R, en intégrant des outils vus dans MAT4372.
+- **Objectif personnel dans cette discussion** :  
+  Comprendre comment simplifier un modèle stochastique tout en restant fidèle à l'intuition de Black-Scholes-Merton, et explorer les compromis entre réalisme empirique, clarté théorique et faisabilité numérique.
+
+# Orientation de la discussion  
+
+- **Article de référence : Fouque & Tullie (2001)**  
+  → Proposition centrale :  
+    - Exploiter l'*approximation asymptotique* lorsque la volatilité revient rapidement vers sa moyenne (fort taux de reversion $\alpha$). 
+    - Si la volatilité fluctue rapidement autour d'un niveau moyen, on peut approximer le prix d'option avec une formule de type Black-Scholes, en remplaçant la volatilité par une volatilité effective (moyenne pondérée dans le temps).
+  → Avantage pratique :  
+    - Réduction significative de la variance en simulations Monte Carlo
+    - Bonne précision même lorsque $\alpha$ n'est pas extrêmement élevé  
+    - Cette approche permet de réduire la variance des simulations et d'accélérer les calculs.
+
+# 1. Fondements théoriques
+
+## 1.1 Modèles à volatilité stochastique
+Modèle de type Heston, tel que défini par les équations (2.1) et (2.4) dans Fouque \& Tullie (2001) :
+- Dynamique du prix de l'actif (équation 2.1) :
+
+$$
+d X_t=\mu X_t d t+\sigma\left(Y_t\right) X_t d W_t
+$$
+
+- Processus de volatilité de type Ornstein-Uhlenbeck (équation 2.4) :
+
+$$
+d Y_t=\alpha\left(m-Y_t\right) d t+\nu \sqrt{2 \alpha}\left(\rho d W_t+\sqrt{1-\rho^2} d Z_t\right)
+$$
+
+> <div style="border:1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+> <strong>Note :</strong> Note pédagogique : 
+Le code suivant répète intentionnellement certaines déclarations pour faciliter
+la lisibilité section par section. En pratique, on optimiserait avec des fonctions. Mais ici, j'ai essayé de privilégier la transparence sur les étapes individuelles.
+> </div>
+
+### Application pratique 1.1: Simulation - processus d'Ornstein-Uhlenbeck
+```{r}
+# Paramètres de base pour l'actif et le processus de volatilité
+mu <- 0.05    # Taux de rendement espéré de l'actif 
+r <- 0.02     # Taux sans risque
+S_0 <- 100    # Prix initial de l'actif
+
+# Paramètres du processus de volatilité stochastique (processus OU)
+alpha <- 10   # Vitesse de réversion vers la moyenne
+m <- 0.04     # Moyenne de long terme (niveau de réversion du processus)
+nu <- 0.1     # Amplitude des fluctuations de la volatilité (paramètre de diffusion)
+rho <- -0.5   # Corrélation entre le bruit du prix de l'actif et celui de la volatilité
+
+dt <- 1/252   # Pas de temps quotidien (252 jours de bourse par an)
+
+# Simulation du processus de volatilité
+set.seed(42)  # Pour assurer la reproductibilité
+
+Y <- numeric(1000)  # Vecteur contenant la trajectoire de la volatilité
+Y[1] <- m           # Condition initiale du processus - Définition de la moyenne de long terme
+
+# Boucle de simulation d'un processus d'Ornstein-Uhlenbeck
+for(i in 2:1000) {
+  Y[i] <- Y[i-1] + alpha * (m - Y[i-1]) * dt + 
+          nu * sqrt(2 * alpha) * sqrt(dt) * rnorm(1)
+}
+
+# Création de l'axe temporel (en années)
+time_grid <- seq(0, (length(Y) - 1) * dt, by = dt)
+
+# Visualisation du processus simulé
+plot(time_grid, Y, type = "l",
+     main = "Processus de volatilité (Ornstein-Uhlenbeck)",
+     xlab = "Temps (années)",
+     ylab = "Volatilité")
+abline(h = m, col = "red", lty = 2)  # Ligne pointillée à la moyenne de long terme
+```
+
+## 1.2 Concept de réversion rapide
+- Lorsque $\alpha$ est grand, $Y_t$ oscille rapidement autour de sa moyenne.
+- Cela justifie l'approximation par une volatilité effective.
+- On peut alors développer des solutions asymptotiques (voir section 2.3 de Fouque & Tullie).
+
+### Application pratique 1.2: Effet de la vitesse de réversion $\alpha$
+```{r}
+# On compare ici l'effet de différentes valeurs de alpha (vitesse de réversion)
+alpha_values <- c(1, 10, 100)       # Trois régimes : lent, modéré, rapide
+Y_matrix <- matrix(0, nrow=1000, ncol=3)  # Matrice pour stocker les trajectoires simulées
+
+# Simulation pour chaque valeur de alpha
+for(j in 1:3) {
+  Y_matrix[1, j] <- m              
+  for(i in 2:1000) {
+    Y_matrix[i, j] <- Y_matrix[i-1, j] + 
+                      alpha_values[j] * (m - Y_matrix[i-1, j]) * dt + 
+                      nu * sqrt(2 * alpha_values[j]) * sqrt(dt) * rnorm(1)
+  }
+}
+
+# Création d'un axe de temps exprimé en années
+time_grid <- seq(0, (nrow(Y_matrix) - 1) * dt, by = dt)
+
+# Visualisation comparative
+matplot(time_grid, Y_matrix, type="l", lty=1:3, col=1:3,
+        main=expression("Impact du paramètre " * alpha * " sur la réversion"),
+        xlab="Temps (années)",                
+        ylab="Volatilité")
+
+# Légende indiquant les valeurs de alpha utilisées
+legend("topright", legend=c(expression(alpha==1), 
+                            expression(alpha==10), 
+                            expression(alpha==100)), 
+       lty=1:3, col=1:3)
+```
+
+# 2. Évaluation d'options
+
+## 2.1 Approche risque-neutre
+- Prix d'une option européenne sous mesure risque-neutre:
+  $$P(t,x,y) = \mathbb{E}^{\mathbb{Q}}\left[e^{-r(T-t)}\phi(X_T)\,|\,X_t=x, Y_t=y\right]$$
+
+où:
+- $\mathbb{E}^{\mathbb{Q}}$ est l'espérance sous la mesure risque-neutre
+- $r$ est le taux sans risque
+- $\phi(X_T)$ est le profil de gain (payoff) de l'option à maturité
+- $X_t$ est le prix de l'actif à l'instant $t$
+- $Y_t$ est le niveau de volatilité à l'instant $t$
+
+## 2.2 Simulation Monte Carlo : description de la méthode
+
+Dans le contexte d'évaluation d'options sous volatilité stochastique, la méthode Monte Carlo standard consiste à:
+
+1. Générer $N$ trajectoires du couple $(X_t, Y_t)$ par la méthode d'Euler
+	- Discrétisation d'équation différentielle sstochastique (EDS) via méthode d'Euler (Hull,2018)
+		- Processus de volatilité :
+		$$
+		Y_{t+\Delta t}=Y_t+\alpha\left(m-Y_t\right) \Delta t+\nu \sqrt{2 \alpha} \Delta 		Z_t
+		$$
+			où $\Delta Z_t=\rho \Delta W_t^1+\sqrt{1-\rho^2} \Delta W_t^2$.
+		- Processus de prix (risque-neutre) :
+		$$
+		\ln X_{t+\Delta t}=\ln X_t+\left(r-\frac{1}{2} Y_t\right) \Delta t+\sqrt{Y_t} 			\Delta W_t^1
+		$$
+
+2. Calculer le profil de gain (payoff) à maturité pour chaque trajectoire
+3. Actualiser les payoffs au taux sans risque
+4. Estimer le prix comme la moyenne empirique des payoffs actualisés
+
+```{r}
+# Paramètres pour la simulation Monte Carlo
+T <- 1           # Maturité de l'option (en années)
+K <- 100         # Prix d'exercice de l'option
+n_steps <- 252   # Nombre de pas de temps (un an de jours ouvrables)
+n_paths <- 5000  # Nombre de trajectoires à simuler
+v0 <- m          # Volatilité initiale (égale à la moyenne à long terme)
+
+# Initialisation des matrices pour les trajectoires
+set.seed(123)    # Pour la reproductibilité
+
+# Génération des incréments browniens corrélés pour les processus de prix et de volatilité
+W1 <- matrix(rnorm(n_steps * n_paths), nrow = n_steps)
+W2 <- matrix(rnorm(n_steps * n_paths), nrow = n_steps)
+Z1 <- W1
+Z2 <- rho * W1 + sqrt(1 - rho^2) * W2
+
+# Matrices pour la trajectoire sans changement de mesure (nominal)
+S_nominal <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+v_nominal <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+
+# Conditions initiales
+S_nominal[1, ] <- S_0
+v_nominal[1, ] <- v0
+
+# Simulation des trajectoires via schéma d'Euler (volatilité) et formule exacte (prix)
+# Voir les équations en section "Discrétisation des EDS" pour les détails théoriques.
+for (i in 1:n_steps) {
+  # Mise à jour de la volatilité (processus OU)
+  v_nominal[i+1, ] <- v_nominal[i, ] + alpha*(m - v_nominal[i, ])*dt + 
+                      nu*sqrt(2*alpha)*sqrt(dt)*Z2[i, ]
+  
+  # Forcer la positivité de la variance - justification:
+  # Le processus OU peut devenir négatif, ce qui n'est pas réaliste pour une variance
+  # Cette correction est une approximation pratique, bien que théoriquement imparfaite
+  v_nominal[i+1, ] <- pmax(v_nominal[i+1, ], 0)
+  
+  # Mise à jour du prix de l'actif sous mesure risque-neutre
+  # Utilisation de la formule exacte pour le log-prix.
+  # L'objectif est de réduire l'erreur de discrétisation et assure la positivité des prix.
+  S_nominal[i+1, ] <- S_nominal[i, ] * exp((r - 0.5*v_nominal[i, ])*dt + 
+                                           sqrt(v_nominal[i, ]*dt)*Z1[i, ])
+}
+
+# Visualisation de quelques trajectoires de prix simulées
+time_grid_full <- seq(0, T, length.out = n_steps + 1)
+matplot(time_grid_full, S_nominal[,1:10], type="l", 
+        col=rgb(1,0,0,0.5), lty=1,
+        main="Trajectoires de prix simulées",
+        xlab="Temps (années)", 
+        ylab="Prix de l'actif")
+abline(h=K, col="blue", lty=2)  # Prix d'exercice
+```
+
+### 2.3 Application à l'option digitale
+
+Une option digitale (ou binaire) paie 1 unité monétaire si l'actif sous-jacent termine au-dessus du prix d'exercice $K$, et 0 sinon. Son payoff est:
+
+$$\phi(X_T) = \mathbf{1}_{\{X_T > K\}}$$
+
+Ce payoff discontinu rend l'évaluation par Monte Carlo particulièrement difficile en raison de la variance élevée.
+
+```{r}
+# Calcul du payoff pour l'option digitale
+payoff_digital <- (S_nominal[n_steps+1,] > K)
+
+# Estimation du prix par Monte Carlo standard
+price_digital_std <- mean(exp(-r*T) * payoff_digital)
+std_error_digital_std <- sd(exp(-r*T) * payoff_digital) / sqrt(n_paths)
+
+cat("Option digitale - Monte Carlo standard:\n")
+cat("Prix estimé:", round(price_digital_std, 6), "\n")
+cat("Écart-type:", round(std_error_digital_std, 6), "\n")
+cat("Intervalle de confiance à 95%: [", 
+    round(price_digital_std - 1.96*std_error_digital_std, 6), ", ",
+    round(price_digital_std + 1.96*std_error_digital_std, 6), "]\n")
+```
+
+
+# 3. Réduction de variance
+
+## 3.1 Principe de l'échantillonnage d'importance
+
+L'échantillonnage d'importance (*importance sampling*) est une technique de réduction de variance qui repose sur deux étapes principales :
+
+- **Étape 1 : Modification de la probabilité des trajectoires**
+  - On simule les trajectoires sous une mesure de probabilité modifiée.
+  - Cette mesure favorise les trajectoires qui contribuent fortement à l'espérance recherchée.
+  - Exemple : dans une option digitale, on augmente artificiellement la fréquence des trajectoires où le prix de l’actif dépasse le prix d’exercice.
+
+- **Étape 2 : Correction du biais introduit**
+  - On applique un facteur de pondération à chaque trajectoire simulée.
+  - Ce facteur ajuste les résultats pour qu’ils reflètent fidèlement la distribution d’origine.
+  - Il est calculé à l’aide de la **densité de Radon-Nikodym**, qui mesure la différence entre la mesure modifiée et la mesure initiale.
+
+- **Interprétation dans le contexte des options**
+  - On modifie généralement la dérive (**drift**) du processus de prix pour rendre certains résultats (comme le dépassement du prix d’exercice) plus probables.
+  - Le **facteur correcteur** dépend :
+    - de la valeur ajoutée au drift,
+    - des incréments simulés du bruit aléatoire (les mouvements browniens),
+    - de la durée de la simulation.
+
+- **Référence théorique**
+  - Le calcul de ce facteur s’appuie sur le **théorème de Girsanov**.
+  - Celui-ci décrit comment relier deux mesures de probabilité quand on modifie le drift d’un processus stochastique.
+  - Dans le cas d’un drift constant, le facteur de correction prend une forme exponentielle simple.
+
+> <div style="border:1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+> <strong>Note :</strong> La formule mathématique exacte (habituellement exprimée à l’aide d’intégrales stochastiques) a été volontairement omise ici. J'ai opté pour cette simplification pour préserver la lisibilité tout en me permettant d'exprimer l’intuition du modèle. Formules complètes consultées dans notes des cours 18-19) et Fouque & Tullie (2001).
+> </div>
+
+
+
+
+```{r}
+# Paramètre pour l'importance sampling
+mu_shift <- 0.1  # Décalage du drift pour importance sampling
+# Justification du choix: Cette valeur a été choisie pour augmenter la probabilité
+# que le prix franchisse le seuil K, tout en maintenant un équilibre entre
+# réduction de variance et stabilité numérique de l'estimateur pondéré
+
+# Note: Un mu_shift trop élevé peut augmenter la variance des poids et dégrader
+# la performance de l'estimateur malgré la hausse du nombre d'événements rares observés
+
+# Matrices pour la trajectoire avec importance sampling
+S_shifted <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+v_shifted <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+
+# Conditions initiales
+S_shifted[1, ] <- S_0
+v_shifted[1, ] <- v0
+
+# Simulation avec importance sampling
+for (i in 1:n_steps) {
+  # Mise à jour de la volatilité (processus OU)
+  v_shifted[i+1, ] <- v_shifted[i, ] + alpha*(m - v_shifted[i, ])*dt + 
+                      nu*sqrt(2*alpha)*sqrt(dt)*Z2[i, ]
+  
+  # Forcer la positivité de la variance
+  v_shifted[i+1, ] <- pmax(v_shifted[i+1, ], 0)
+  
+  # Mise à jour du prix de l'actif avec drift modifié
+  S_shifted[i+1, ] <- S_shifted[i, ] * exp((r + mu_shift - 0.5*v_shifted[i, ])*dt + 
+                                          sqrt(v_shifted[i, ]*dt)*Z1[i, ])
+}
+
+# Comparaison visuelle des trajectoires
+matplot(time_grid_full, S_nominal[,1:10], type="l", col=rgb(1,0,0,0.5),
+        main="Comparaison des trajectoires",
+        xlab="Temps (années)", ylab="Prix", lty=1)
+matlines(time_grid_full, S_shifted[,1:10], col=rgb(0,0,1,0.5), lty=2)
+abline(h=K, col="black", lty=2)  # Prix d'exercice
+legend("topleft", legend=c("Standard", "Importance sampling"),
+       col=c("red", "blue"), lty=c(1,2), bty="n")
+```
+
+### 3.2 Correction de pondération et résultats
+
+Pour corriger le biais introduit par le changement de mesure, on pondère chaque réalisation par la dérivée de Radon-Nikodym:
+
+```{r}
+# Calcul du payoff pour l'option digitale avec importance sampling
+payoff_digital_shifted <- (S_shifted[n_steps+1,] > K)
+
+# Calcul de la correction de pondération (dérivée de Radon-Nikodym)
+# Implémentation de la formule de Girsanov pour le changement de mesure:
+weight <- exp(-mu_shift * colSums(Z1) * sqrt(dt) + 0.5 * mu_shift^2 * T)
+
+# Estimation du prix avec importance sampling
+price_digital_is <- mean(exp(-r*T) * payoff_digital_shifted * weight)
+std_error_digital_is <- sd(exp(-r*T) * payoff_digital_shifted * weight) / sqrt(n_paths)
+
+# Comparaison des résultats
+results <- data.frame(
+  Method = c("Monte Carlo standard", "Importance Sampling"),
+  Price = c(price_digital_std, price_digital_is),
+  StdError = c(std_error_digital_std, std_error_digital_is),
+  VarianceReduction = c("Référence", 
+                        paste0(round((1-std_error_digital_is^2/std_error_digital_std^2)*100), "%"))
+)
+print(results)
+```
+
+# 4. Analyse de convergence
+
+## 4.1 Étude de la convergence selon la taille d'échantillon
+
+Théoriquement, l'erreur d'estimation par Monte Carlo décroît en $\mathcal{O}(1/\sqrt{N})$. Nous allons vérifier cette propriété empiriquement et comparer les deux méthodes:
+
+```{r}
+# Analyse de convergence selon la taille d'échantillon
+sample_sizes <- seq(500, 10000, by = 500)
+std_errors_standard <- c()
+std_errors_importance <- c()
+
+set.seed(42)
+for (n_paths in sample_sizes) {
+  # Génération des incréments de mouvements browniens corrélés
+  W1 <- matrix(rnorm(n_steps * n_paths), nrow = n_steps)
+  W2 <- matrix(rnorm(n_steps * n_paths), nrow = n_steps)
+  Z1 <- W1
+  Z2 <- rho * W1 + sqrt(1 - rho^2) * W2
+  
+  # Simulation Monte Carlo standard
+  S_nom <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+  v_nom <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+  S_nom[1, ] <- S_0
+  v_nom[1, ] <- v0
+  
+  # Simulation avec importance sampling
+  S_imp <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+  v_imp <- matrix(0, nrow = n_steps + 1, ncol = n_paths)
+  S_imp[1, ] <- S_0
+  v_imp[1, ] <- v0
+  
+  # Simulation des trajectoires
+  for (i in 1:n_steps) {
+    # Monte Carlo standard
+    v_nom[i+1, ] <- v_nom[i, ] + alpha*(m - v_nom[i, ])*dt + nu*sqrt(2*alpha)*sqrt(dt)*Z2[i, ]
+    v_nom[i+1, ] <- pmax(v_nom[i+1, ], 0)
+    S_nom[i+1, ] <- S_nom[i, ] * exp((r - 0.5*v_nom[i, ])*dt + sqrt(v_nom[i, ]*dt)*Z1[i, ])
+    
+    # Importance sampling
+    v_imp[i+1, ] <- v_imp[i, ] + alpha*(m - v_imp[i, ])*dt + nu*sqrt(2*alpha)*sqrt(dt)*Z2[i, ]
+    v_imp[i+1, ] <- pmax(v_imp[i+1, ], 0)
+    S_imp[i+1, ] <- S_imp[i, ] * exp((r + mu_shift - 0.5*v_imp[i, ])*dt + sqrt(v_imp[i, ]*dt)*Z1[i, ])
+  }
+  
+  # Calcul des payoffs et poids
+  payoff_nom <- as.numeric(S_nom[n_steps + 1, ] > K)
+  payoff_imp <- as.numeric(S_imp[n_steps + 1, ] > K)
+  weights <- exp(-mu_shift * colSums(Z1) * sqrt(dt) + 0.5 * mu_shift^2 * T)
+  
+  # Calcul des écarts-types
+  std_errors_standard <- c(std_errors_standard, 
+                          sd(exp(-r*T) * payoff_nom) / sqrt(n_paths))
+  std_errors_importance <- c(std_errors_importance, 
+                            sd(exp(-r*T) * payoff_imp * weights) / sqrt(n_paths))
+}
+
+# Tracé de la convergence
+plot(sample_sizes, std_errors_standard, type="l", col="red", lwd=2,
+     xlab="Taille de l'échantillon", ylab="Écart-type de l'estimateur",
+     main="Comparaison de la convergence selon la taille d'échantillon")
+lines(sample_sizes, std_errors_importance, col="blue", lwd=2, lty=2)
+legend("topright", legend=c("Monte Carlo standard", "Importance Sampling"), 
+       col=c("red", "blue"), lty=c(1,2))
+
+# Interprétation: On observe que l'écart-type décroît avec l'augmentation de la taille
+# d'échantillon pour les deux méthodes, mais l'importance sampling maintient
+# un avantage constant, offrant une meilleure précision à taille d'échantillon égale
+```
+
+## 4.2 Convergence en échelle log-log
+
+L'échelle log-log permet de visualiser la convergence en puissance et de vérifier la pente de -1/2 attendue théoriquement:
+
+```{r}
+# Analyse en échelle log-log
+plot(log10(sample_sizes), log10(std_errors_standard), type="l", col="red", lwd=2,
+     xlab="log10(Taille échantillon)", ylab="log10(Écart-type)",
+     main="Convergence en échelle log-log")
+lines(log10(sample_sizes), log10(std_errors_importance), col="blue", lwd=2, lty=2)
+
+# Ligne de référence théorique (pente -1/2)
+ref_a <- log10(std_errors_standard[1]) - (-0.5) * log10(sample_sizes[1])
+abline(a = ref_a, b = -0.5, col="gray", lty=3)
+
+legend("topright", legend=c("Monte Carlo standard", "Importance Sampling", "Pente théorique -1/2"), 
+       col=c("red", "blue", "gray"), lty=c(1,2,3))
+```
+
+# 5. Conclusion
+
+## 5.1 Synthèse des résultats
+
+Les résultats obtenus montrent que:
+
+1. L'échantillonnage d'importance offre une réduction significative de la variance pour l'évaluation d'options sous volatilité stochastique.
+2. La convergence en $mathcal{O}(1/\sqrt{N})$ est confirmée empiriquement pour les deux méthodes.
+3. L'efficacité de l'importance sampling est particulièrement notable pour les options à payoff discontinu (comme l'option digitale).
+
+## 5.2 Liens avec le cours MAT4372
+
+Cette étude applique plusieurs concepts fondamentaux vus en cours:
+- Modélisation par processus stochastiques (OU pour la volatilité)
+- Théorème de Girsanov pour le changement de mesure
+- Simulation des EDS par méthode d'Euler
+- Technique de réduction de variance par échantillonnage d'importance
+
+## 5.3 Extensions possibles
+
+Pour approfondir mon exploration pratique, il serait intéressant d'essayer:
+- D'implémenter la solution complète avec expansion asymptotique telle que proposée par Fouque & Tullie
+- De comparer avec d'autres techniques de réduction de variance (variables antithétiques, variables de contrôle)
+- D'étendre l'analyse à d'autres types d'options exotiques (barrière, asiatique, lookback)
+- D'étudier des modèles plus complexes (p.ex. avec sauts)
+
+## 5.4 Apports personnels de cette démarche
+
+Cette étude m'a permis de:
+- Confronter théorie et pratique numérique
+- Mieux comprendre les subtilités du changement de mesure
+- Développer une intuition plus fine sur le rôle de la volatilité stochastique
+- Évaluer quantitativement l'efficacité des méthodes de réduction de variance
+
+# Références
+
+- Boire, F.-M. (2025). *MAT 4372 Financial Mathematics: Lectures 18 and 19*. Department of Mathematics and Statistics, University of Ottawa.
+
+
+- Fouque, J.-P., & Andrew Tullie, T. (2002). Variance reduction for Monte Carlo simulation in a stochastic volatility environment. Quantitative Finance, 2(1), 24–30. https://doi.org/10.1088/1469-7688/2/1/302
+
+
+- Hull, J. (2018). Options, futures, and other derivatives (10th ed., pp. 491–510). Pearson.
+
+- Shreve, S. E. (2010). Stochastic calculus for finance II: Continuous-time models (pp. 288–290, 450). Springer.
+
+- Racicot, F.-É., & Théoret, R. (2006). Finance computationnelle et gestion des risques: Ingénierie financière avec applications Excel (Visual Basic) et Matlab. PU Québec. https://doi.org/10.14375/NP.9782760519121
+
+
+## Annexe 1 : Convergence de l'estimateur Monte Carlo {.tabset .tabset-fade}
+
+### Fondements mathématiques de la convergence en $\mathcal{O}(1/\sqrt{N})$
+
+En vertu du Théorème Central Limite (TCL), si $X_1, X_2, \ldots, X_N$ sont des variables aléatoires indépendantes et identiquement distribuées (i.i.d.) avec une moyenne $\mu$ et une variance finie $\sigma^2$, alors la moyenne empirique :
+
+$$\bar{X}_N=\frac{1}{N} \sum_{i=1}^N X_i$$
+
+converge en distribution vers une loi normale lorsque $N$ tend vers l'infini :
+
+$$\sqrt{N}\left(\bar{X}_N-\mu\right) \xrightarrow{d} \mathcal{N}\left(0, \sigma^2\right)$$
+
+On peut réarranger cette expression pour obtenir :
+
+$$\bar{X}_N-\mu \approx \mathcal{N}\left(0, \frac{\sigma^2}{N}\right)$$
+
+Ce qui nous montre que l'écart-type de l'estimateur est :
+
+$$\text{Écart-type}=\frac{\sigma}{\sqrt{N}}$$
+
+Donc, lorsqu'on estime l'espérance d'une variable aléatoire (comme le prix d'une option) par simulation Monte Carlo, on génère $N$ réalisations indépendantes et on calcule leur moyenne empirique. Le TCL nous permet d'établir que l'erreur de cette estimation décroît proportionnellement à $1/\sqrt{N}$.
+
+### Implications pratiques
+
+Dans le cadre de l'évaluation d'options, cette convergence en $O(1/\sqrt{N})$ implique :
+
+1. Pour réduire l'erreur d'estimation par un facteur $k$, le nombre de simulations doit être multiplié par $k^2$
+    
+2. Intervalle de confiance à $95%$ : $\bar{X}_N \pm 1.96 \times \frac{\sigma}{\sqrt{N}}$
+    
+Cela justifie la recherche de techniques de réduction de variance comme celle proposée par Fouque & Tullie (2001), qui permettent d'obtenir une même précision avec significativement moins de simulations.
+
+### Illustration empirique : pente de -1/2 en échelle log-log
+
+J’ai voulu recourir à une méthode simple pour vérifier empiriquement la convergence en $\mathcal{O}(1/\sqrt{N})$. Comme il est courant de représenter l’écart-type estimé en fonction de la taille de l’échantillon sur une échelle log-log, j’ai tracé cette relation afin d’observer la pente théorique attendue.
+
+- Si l’erreur décroît bien comme $1/\sqrt{N}$, on doit observer une pente proche de **-1/2** sur le graphique log-log.
+- Ce test visuel permet de confirmer que la simulation respecte le comportement asymptotique prévu par le TCL.
+- Dans mon cas, les deux méthodes (standard et importance sampling) affichent une pente cohérente avec la théorie, ce qui renforce la crédibilité des résultats obtenus.
+
+
+
+# Annexe 2: Fouque et Tullie (2001)
+
+<iframe src="https://www.dl.dropboxusercontent.com/scl/fi/3g90v4ca87z2xi5ykh937/ft.pdf?rlkey=uxlpv3tb0km8hccz111s0k7mx&st=h2bfahn9&war=0" width="800" height="600" style="border: none;"></iframe>
