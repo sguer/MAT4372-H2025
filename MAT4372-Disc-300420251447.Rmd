@@ -522,7 +522,7 @@ Cette étude m'a permis de:
 - Racicot, F.-É., & Théoret, R. (2006). Finance computationnelle et gestion des risques: Ingénierie financière avec applications Excel (Visual Basic) et Matlab. PU Québec. https://doi.org/10.14375/NP.9782760519121
 
 
-# Annexe 1 : Convergence de l'estimateur Monte Carlo {.tabset .tabset-fade}
+# Annexe : Convergence de l'estimateur Monte Carlo
 
 ## Fondements mathématiques de la convergence en $\mathcal{O}(1/\sqrt{N})$
 
@@ -563,8 +563,3 @@ J’ai voulu recourir à une méthode simple pour vérifier empiriquement la con
 - Dans mon cas, les deux méthodes (standard et importance sampling) affichent une pente cohérente avec la théorie, ce qui renforce la crédibilité des résultats obtenus.
 
 
-
-# Annexe 2: Fouque et Tullie (2001) {.tabset .tabset-fade}
-
-
-<iframe src="https://www.dropbox.com/scl/fi/3g90v4ca87z2xi5ykh937/ft.pdf?rlkey=uxlpv3tb0km8hccz111s0k7mx&st=h2bfahn9&dl=0" width="800" height="600" style="border: none;"></iframe>
