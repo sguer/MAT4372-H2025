@@ -564,6 +564,6 @@ J’ai voulu recourir à une méthode simple pour vérifier empiriquement la con
 
 
 
-# Annexe 2: Fouque et Tullie (2001) {.tabset .tabset-fade}
+# Annexe 2: Fouque et Tullie (2001)
 
 <object data="https://github.com/sguer/MAT4372-H2025/blob/4a5c5d8c95b2b8220e77587a7f4242157eea97f8/ft.pdf" type="application/pdf" width="800px" height="600px">
