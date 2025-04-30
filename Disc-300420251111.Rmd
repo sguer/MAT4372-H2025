@@ -168,9 +168,9 @@ legend("topright", legend=c(expression(alpha==1),
        lty=1:3, col=1:3)
 ```
 
-## 2. Évaluation d'options
+# 2. Évaluation d'options
 
-### 2.1 Approche risque-neutre
+## 2.1 Approche risque-neutre
 - Prix d'une option européenne sous mesure risque-neutre:
   $$P(t,x,y) = \mathbb{E}^{\mathbb{Q}}\left[e^{-r(T-t)}\phi(X_T)\,|\,X_t=x, Y_t=y\right]$$
 
@@ -181,7 +181,7 @@ où:
 - $X_t$ est le prix de l'actif à l'instant $t$
 - $Y_t$ est le niveau de volatilité à l'instant $t$
 
-### 2.2 Simulation Monte Carlo : description de la méthode
+## 2.2 Simulation Monte Carlo : description de la méthode
 
 Dans le contexte d'évaluation d'options sous volatilité stochastique, la méthode Monte Carlo standard consiste à:
 
@@ -280,9 +280,9 @@ cat("Intervalle de confiance à 95%: [",
 ```
 
 
-## 3. Réduction de variance
+# 3. Réduction de variance
 
-### 3.1 Principe de l'échantillonnage d'importance
+## 3.1 Principe de l'échantillonnage d'importance
 
 L'échantillonnage d'importance (*importance sampling*) est une technique de réduction de variance qui repose sur deux étapes principales :
 
@@ -384,9 +384,9 @@ results <- data.frame(
 print(results)
 ```
 
-## 4. Analyse de convergence
+# 4. Analyse de convergence
 
-### 4.1 Étude de la convergence selon la taille d'échantillon
+## 4.1 Étude de la convergence selon la taille d'échantillon
 
 Théoriquement, l'erreur d'estimation par Monte Carlo décroît en $\mathcal{O}(1/\sqrt{N})$. Nous allons vérifier cette propriété empiriquement et comparer les deux méthodes:
 
@@ -454,7 +454,7 @@ legend("topright", legend=c("Monte Carlo standard", "Importance Sampling"),
 # un avantage constant, offrant une meilleure précision à taille d'échantillon égale
 ```
 
-### 4.2 Convergence en échelle log-log
+## 4.2 Convergence en échelle log-log
 
 L'échelle log-log permet de visualiser la convergence en puissance et de vérifier la pente de -1/2 attendue théoriquement:
 
@@ -473,9 +473,9 @@ legend("topright", legend=c("Monte Carlo standard", "Importance Sampling", "Pent
        col=c("red", "blue", "gray"), lty=c(1,2,3))
 ```
 
-## 5. Conclusion
+# 5. Conclusion
 
-### 5.1 Synthèse des résultats
+## 5.1 Synthèse des résultats
 
 Les résultats obtenus montrent que:
 
@@ -483,23 +483,23 @@ Les résultats obtenus montrent que:
 2. La convergence en $mathcal{O}(1/\sqrt{N})$ est confirmée empiriquement pour les deux méthodes.
 3. L'efficacité de l'importance sampling est particulièrement notable pour les options à payoff discontinu (comme l'option digitale).
 
-### 5.2 Liens avec le cours MAT4372
+## 5.2 Liens avec le cours MAT4372
 
 Cette étude applique plusieurs concepts fondamentaux vus en cours:
 - Modélisation par processus stochastiques (OU pour la volatilité)
 - Théorème de Girsanov pour le changement de mesure
 - Simulation des EDS par méthode d'Euler
-- Technique de réduction de variance par échantillonnage préférentiel
+- Technique de réduction de variance par échantillonnage d'importance
 
-### 5.3 Extensions possibles
+## 5.3 Extensions possibles
 
 Pour approfondir mon exploration pratique, il serait intéressant d'essayer:
 - D'implémenter la solution complète avec expansion asymptotique telle que proposée par Fouque & Tullie
 - De comparer avec d'autres techniques de réduction de variance (variables antithétiques, variables de contrôle)
 - D'étendre l'analyse à d'autres types d'options exotiques (barrière, asiatique, lookback)
-- d'Étudier des modèles plus complexes (p.ex. avec sauts)
+- D'étudier des modèles plus complexes (p.ex. avec sauts)
 
-### 5.4 Apports personnels de cette démarche
+## 5.4 Apports personnels de cette démarche
 
 Cette étude m'a permis de:
 - Confronter théorie et pratique numérique
