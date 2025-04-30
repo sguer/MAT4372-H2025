@@ -566,4 +566,4 @@ J’ai voulu recourir à une méthode simple pour vérifier empiriquement la con
 
 # Annexe 2: Fouque et Tullie (2001) {.tabset .tabset-fade}
 
-<embed src="/Users/sabrinaguerrier/Library/CloudStorage/OneDrive-UniversityofOttawa/W2025/MAT4372-OralExam/ft.pdf" width="800px" height="600px">
+<embed src="ft.pdf" width="800px" height="600px">
