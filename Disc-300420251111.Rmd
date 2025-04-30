@@ -566,4 +566,4 @@ J’ai voulu recourir à une méthode simple pour vérifier empiriquement la con
 
 # Annexe 2: Fouque et Tullie (2001)
 
-<object data="https://github.com/sguer/MAT4372-H2025/blob/4a5c5d8c95b2b8220e77587a7f4242157eea97f8/ft.pdf" type="application/pdf" width="800px" height="600px">
+<iframe src="https://www.dropbox.com/scl/fi/3g90v4ca87z2xi5ykh937/ft.pdf?rlkey=uxlpv3tb0km8hccz111s0k7mx&st=h2bfahn9&dl=0" width="800" height="600" style="border: none;"></iframe>
