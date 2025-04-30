@@ -40,5 +40,5 @@ Les résultats présentés sont exploratoires et ne doivent pas être considér�
 
 
 ### Références principales
-- Fouque, J.-P., & Tullie, T. A. (2002). Variance reduction for Monte Carlo simulation in a stochastic volatility environment. *Quantitative Finance*, 2(1), 24–30.
+- Fouque, J.-P., & Andrew Tullie, T. (2002). Variance reduction for Monte Carlo simulation in a stochastic volatility environment. Quantitative Finance, 2(1), 24–30. https://doi.org/10.1088/1469-7688/2/1/302
 - Notes de cours et discussions avec Prof. François-Michel Boire (Université d'Ottawa, MAT4372).
